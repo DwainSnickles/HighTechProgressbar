@@ -1,0 +1,176 @@
+name: Publish NuGet package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Package version (defaults to the tag, or the csproj <Version> when run from a branch)
+        required: false
+      dry_run:
+        description: Build and pack, but do not push to nuget.org
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Pack and push
+    runs-on: windows-latest
+    # The Trusted Publishing policy on nuget.org names this environment, so the OIDC token has to
+    # carry it or the exchange is refused. Declaring it also creates the environment on the first
+    # run. Removing it from either side breaks the keyless path.
+    environment: TextProgressbar
+    permissions:
+      contents: read
+      # Lets the job ask GitHub for an OIDC token. Trusted Publishing exchanges that token for a
+      # temporary nuget.org API key, so no long-lived credential is stored in this repository.
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Resolve the package identity
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -n "${{ inputs.version }}" ]; then
+            version="${{ inputs.version }}"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            # v1.0.0 -> 1.0.0, v2.0.0-beta.1 -> 2.0.0-beta.1
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version=$(sed -n 's/.*<Version>\(.*\)<\/Version>.*/\1/p' TextProgressbar.csproj | head -1)
+          fi
+
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'$version' is not a valid NuGet version. Tag releases as v<major>.<minor>.<patch>."
+            exit 1
+          fi
+
+          # The package id is read from the project rather than repeated here, so renaming the
+          # package cannot leave this workflow pointing at artifacts that are never produced.
+          pkgid=$(sed -n 's/.*<PackageId>\(.*\)<\/PackageId>.*/\1/p' TextProgressbar.csproj | head -1)
+          if [ -z "$pkgid" ]; then
+            echo "::error::TextProgressbar.csproj has no <PackageId>; the workflow will not guess one."
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "pkgid=$pkgid" >> "$GITHUB_OUTPUT"
+          echo "Packing $pkgid $version"
+
+      - name: Build
+        run: dotnet build TextProgressbar.csproj -c Release -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Pack
+        run: dotnet pack TextProgressbar.csproj -c Release --no-build -o artifacts -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Check the package contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - "${{ steps.version.outputs.pkgid }}" "${{ steps.version.outputs.version }}" <<'PY'
+          import sys, zipfile
+          pkgid, version = sys.argv[1], sys.argv[2]
+          nupkg = f"artifacts/{pkgid}.{version}.nupkg"
+
+          with zipfile.ZipFile(nupkg) as z:
+              names = z.namelist()
+              assert "README.md" in names, f"no README.md in {names}"
+              libdirs = {n.split("/")[1] for n in names if n.startswith("lib/") and n.count("/") >= 2}
+              assert "net10.0-windows7.0" in libdirs, f"net10.0-windows missing from lib/: {sorted(libdirs)}"
+              assert "lib/net10.0-windows7.0/TextProgressbar.dll" in names, f"runtime assembly missing: {names}"
+
+              nuspec = z.read(f"{pkgid}.nuspec").decode("utf-8-sig")
+              assert f"<id>{pkgid}</id>" in nuspec, "the nuspec id does not match the project"
+              assert f"<version>{version}</version>" in nuspec, "the nuspec version does not match"
+
+          print(f"{nupkg}: {', '.join(names)}")
+          PY
+          ls -l artifacts
+
+      - name: Upload the packages as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages-${{ steps.version.outputs.version }}
+          path: artifacts/*
+          if-no-files-found: error
+
+      # Two ways to authenticate. Trusted Publishing is preferred: the policy registered on
+      # nuget.org names this repository owner, this repository, this workflow file and the profile
+      # below, and the token is minted from GitHub's OIDC endpoint without touching a secret. The
+      # fallback is the NUGET_API_KEY repository secret, for when that policy cannot be made to
+      # match. A step cannot read a secret in its own `if`, so the choice is made here and the
+      # login step keys off the output.
+      - name: Choose the push credential
+        id: credential
+        if: ${{ inputs.dry_run != true }}
+        shell: bash
+        env:
+          SECRET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          if [ -n "${SECRET_API_KEY:-}" ]; then
+            echo "mode=secret" >> "$GITHUB_OUTPUT"
+            echo "Pushing with the NUGET_API_KEY repository secret."
+          else
+            echo "mode=trusted" >> "$GITHUB_OUTPUT"
+            echo "No NUGET_API_KEY secret, so this job will log in to nuget.org with GitHub OIDC."
+          fi
+
+      - name: Log in to nuget.org (OIDC)
+        id: login
+        if: ${{ inputs.dry_run != true && steps.credential.outputs.mode == 'trusted' }}
+        uses: NuGet/login@v1
+        with:
+          # The nuget.org *profile* name, not an email address and not the GitHub login.
+          user: Dwains
+
+      - name: Push to nuget.org
+        if: ${{ inputs.dry_run != true }}
+        shell: bash
+        env:
+          SECRET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          OIDC_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          api_key="${SECRET_API_KEY:-$OIDC_API_KEY}"
+          if [ -z "$api_key" ]; then
+            echo "::error::There is no credential to push with. Either add a NUGET_API_KEY repository secret, or make the Trusted Publishing policy match this run: repository owner 'DwainSnickles', repository 'TextProgressbar', workflow 'publish.yml', environment 'TextProgressbar'."
+            exit 1
+          fi
+          # --skip-duplicate keeps a re-run of an already-published version green.
+          for file in artifacts/*.nupkg artifacts/*.snupkg; do
+            dotnet nuget push "$file" --api-key "$api_key" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          done
+
+      - name: Summary
+        shell: bash
+        run: |
+          {
+            echo "### ${{ steps.version.outputs.pkgid }} ${{ steps.version.outputs.version }}"
+            echo
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "Dry run: packed and verified, nothing pushed to nuget.org."
+            else
+              echo "Pushed to nuget.org (${{ steps.credential.outputs.mode }}). It appears in search a few minutes after the push."
+            fi
+            echo
+            echo "https://www.nuget.org/packages/${{ steps.version.outputs.pkgid }}/${{ steps.version.outputs.version }}"
+          } >> "$GITHUB_STEP_SUMMARY"
