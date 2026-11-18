@@ -44,3 +44,9 @@ dotnet run --project TextProgressbar.Samples
 ## Credit
 
 This project is based on / forked from [taancer/aProgressBar](https://github.com/taancer/aProgressBar) — *C# ProgressBar with Text*.
+
+## Support this project
+
+If this project saved you some time, you can leave a tip at
+[ko-fi.com/dwainhsnickles](https://ko-fi.com/dwainhsnickles) (cards, no account needed) or
+[paypal.me/YTDPlatinum](https://paypal.me/YTDPlatinum). Bug reports and pull requests are welcome too.
