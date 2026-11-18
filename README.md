@@ -36,23 +36,11 @@ Set the `RenderStyle` property to choose how the progress fill is drawn:
 - `ShimmerEnabled` / `ShimmerSpeed` / `ShimmerColor` / `ShimmerDirection` — animated light sweep (linear) or rotating highlight wedge (circular), on a `Timer` that only runs while the control is visible.
 - `BlockGradientMode` — per-block gradient direction (`Vertical`, `Horizontal`, `Diagonal`).
 
-## Sample app
-
-`TextProgressbar.Samples` is a WinForms demo showing every linear and circular style with live sliders and global effect controls:
-
-```
-dotnet run --project TextProgressbar.Samples
-```
-
-## Support
-
-If this project saved you some time, you can leave a tip at [ko-fi.com/dwainhsnickles](https://ko-fi.com/dwainhsnickles) (cards, no account needed) or [paypal.me/YTDPlatinum](https://paypal.me/YTDPlatinum). Bug reports and pull requests are welcome too.
-
 ## Credit
 
 This project is based on / forked from [taancer/aProgressBar](https://github.com/taancer/aProgressBar) — *C# ProgressBar with Text*.
 
-## Support this project
+## Support
 
 If this project saved you some time, you can leave a tip at
 [ko-fi.com/dwainhsnickles](https://ko-fi.com/dwainhsnickles) (cards, no account needed) or
