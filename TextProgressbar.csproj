@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -15,8 +15,8 @@
     <Description>Custom WinForms ProgressBar control with three-color gradient rendering, configurable border and aligned text overlay. Based on taancer/HighTechProgressBar (https://github.com/taancer/HighTechProgressBar).</Description>
     <PackageTags>winforms;progressbar;custom-controls;controls;dotnet;net10;windows-forms;csharp;gui</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/DwainSnickles/TextProgressbar</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/DwainSnickles/TextProgressbar.git</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/DwainSnickles/HighTechProgressbar</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/DwainSnickles/HighTechProgressbar.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReleaseNotes>Rounded corners and pill-style segmented blocks (BlockCornerRadius, CornerRadius), circular ring mode with RingThickness/StartAngle/RoundCaps, vertical orientation, five RenderStyle modes (Gradient, Blocks3D, Segmented, Neon, Striped), shimmer sweep effect, and per-block gradient direction.</PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
