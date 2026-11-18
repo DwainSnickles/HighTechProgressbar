@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -18,7 +18,7 @@
     <PackageProjectUrl>https://github.com/DwainSnickles/TextProgressbar</PackageProjectUrl>
     <RepositoryUrl>https://github.com/DwainSnickles/TextProgressbar.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageReleaseNotes>Initial release: gradient progress fill, background gradient, border styling, and positioned text drawn over the bar.</PackageReleaseNotes>
+    <PackageReleaseNotes>Rounded corners and pill-style segmented blocks (BlockCornerRadius, CornerRadius), circular ring mode with RingThickness/StartAngle/RoundCaps, vertical orientation, five RenderStyle modes (Gradient, Blocks3D, Segmented, Neon, Striped), shimmer sweep effect, and per-block gradient direction.</PackageReleaseNotes>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>

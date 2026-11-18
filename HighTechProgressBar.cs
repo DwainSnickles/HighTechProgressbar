@@ -1833,8 +1833,7 @@ namespace TextProgressbar
 
             float ringRadius =
                 (Math.Min(rect.Width, rect.Height) -
-                 border * 2f - _ringThickness) / 2f +
-                _ringThickness / 2f;
+                 border * 2f - _ringThickness) / 2f;
 
             if (ringRadius <= _ringThickness / 2f + 1f)
                 return;
@@ -2279,28 +2278,26 @@ namespace TextProgressbar
             float absSweep = Math.Abs(sweepAngle);
             int steps = Math.Max(1, (int)(absSweep / 3f));
 
+            var points = new List<PointF>(2 * steps + 4);
+
             // Outer edge
             for (int i = 0; i <= steps; i++)
             {
                 float a = startAngle + sweepAngle * i / steps;
-                PointF p = PolarPoint(center, outerR, a);
-                if (i == 0) path.StartFigure();
-                else path.AddLine(path.PathPoints[^1], p);
+                points.Add(PolarPoint(center, outerR, a));
             }
 
             // Line to inner arc end, then inner edge back
             float endAngle = startAngle + sweepAngle;
-            PointF innerEnd = PolarPoint(center, innerR, endAngle);
-            path.AddLine(path.PathPoints[^1], innerEnd);
+            points.Add(PolarPoint(center, innerR, endAngle));
 
             for (int i = steps; i >= 0; i--)
             {
                 float a = startAngle + sweepAngle * i / steps;
-                PointF p = PolarPoint(center, innerR, a);
-                path.AddLine(path.PathPoints[^1], p);
+                points.Add(PolarPoint(center, innerR, a));
             }
 
-            path.CloseFigure();
+            path.AddPolygon(points.ToArray());
             return path;
         }
 
