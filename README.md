@@ -1,5 +1,8 @@
 # TextProgressbar
 
+[![Support this project on Ko-fi](https://img.shields.io/badge/Ko--fi-Support-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/dwainhsnickles)
+[![Donate on PayPal](https://img.shields.io/badge/PayPal-Donate-003087?logo=paypal&logoColor=white)](https://paypal.me/YTDPlatinum)
+
 ![HighTechProgressBar demo](preview.gif)
 
 A custom WinForms `ProgressBar` control — now named **`HighTechProgressBar`** — with gradient rendering, border styling, text display, multiple render styles, and circular ring mode.
@@ -40,6 +43,10 @@ Set the `RenderStyle` property to choose how the progress fill is drawn:
 ```
 dotnet run --project TextProgressbar.Samples
 ```
+
+## Support
+
+If this project saved you some time, you can leave a tip at [ko-fi.com/dwainhsnickles](https://ko-fi.com/dwainhsnickles) (cards, no account needed) or [paypal.me/YTDPlatinum](https://paypal.me/YTDPlatinum). Bug reports and pull requests are welcome too.
 
 ## Credit
 
