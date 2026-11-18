@@ -20,6 +20,30 @@ namespace TextProgressbar
         /// <summary>Horizontal stripes that scroll when shimmer is enabled.</summary>
         Striped
     }
+
+    /// <summary>
+    /// Direction the three-color gradient sweeps in.
+    /// </summary>
+    public enum GradientMode
+    {
+        /// <summary>Left edge to right edge (default).</summary>
+        LeftToRight,
+
+        /// <summary>Right edge to left edge.</summary>
+        RightToLeft,
+
+        /// <summary>Top edge to bottom edge.</summary>
+        TopToBottom,
+
+        /// <summary>Bottom edge to top edge.</summary>
+        BottomToTop,
+
+        /// <summary>Top-left corner to bottom-right corner.</summary>
+        DiagonalDown,
+
+        /// <summary>Bottom-left corner to top-right corner.</summary>
+        DiagonalUp
+    }
 }
 
 /// <summary>

@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Globalization;
 using System.Windows.Forms;
 
 namespace TextProgressbar
@@ -11,7 +12,7 @@ namespace TextProgressbar
         private Color _gradientColor1;
         private Color _gradientColor2;
         private Color _gradientColor3;
-        private LinearGradientMode _gradientMode;
+        private GradientMode _gradientMode;
 
         private Color _backGradientColor1;
         private Color _backGradientColor2;
@@ -26,6 +27,8 @@ namespace TextProgressbar
         private Point _textMargin;
         private Font _textFont;
         private string _text = string.Empty;
+        private bool _showValueAsText;
+        private bool _syncingText;
 
         // =========================================================
         // STYLE / EFFECTS
@@ -157,9 +160,142 @@ namespace TextProgressbar
                 if (_text != value)
                 {
                     _text = value;
+
+                    // Typing a number (or "45%") also drives the value,
+                    // so text and fill stay in step in either direction.
+                    if (_showValueAsText && !_syncingText)
+                        ApplyValueFromText(_text);
+
                     Invalidate();
                 }
             }
+        }
+
+        // =========================================================
+        // AUTOMATIC VALUE TEXT
+        // =========================================================
+
+        /// <summary>
+        /// When true (default), the text follows the current value
+        /// and is redrawn as a percentage of the range whenever
+        /// <see cref="Value"/>, <see cref="Minimum"/> or
+        /// <see cref="Maximum"/> changes. Set to false to keep
+        /// whatever custom text was assigned to <see cref="Text"/>.
+        /// </summary>
+        [Browsable(true)]
+        [Category("Appearance")]
+        [DefaultValue(true)]
+        public bool ShowValueAsText
+        {
+            get => _showValueAsText;
+            set
+            {
+                if (_showValueAsText != value)
+                {
+                    _showValueAsText = value;
+                    UpdateValueText();
+                    Invalidate();
+                }
+            }
+        }
+
+        [Browsable(true)]
+        [Category("Behavior")]
+        [DefaultValue(0)]
+        public new int Minimum
+        {
+            get => base.Minimum;
+            set
+            {
+                base.Minimum = value;
+                UpdateValueText();
+            }
+        }
+
+        [Browsable(true)]
+        [Category("Behavior")]
+        [DefaultValue(100)]
+        public new int Maximum
+        {
+            get => base.Maximum;
+            set
+            {
+                base.Maximum = value;
+                UpdateValueText();
+            }
+        }
+
+        /// <summary>
+        /// Rebuilds <see cref="Text"/> from the current value.
+        /// </summary>
+        private void UpdateValueText()
+        {
+            if (!_showValueAsText)
+                return;
+
+            double percent =
+                Maximum > Minimum
+                    ? (double)(Value - Minimum) /
+                      (Maximum - Minimum) * 100.0
+                    : 0.0;
+
+            // Guard so writing the text does not feed straight back
+            // into the value and start a loop.
+            _syncingText = true;
+
+            try
+            {
+                Text = $"{(int)Math.Round(percent)}%";
+            }
+            finally
+            {
+                _syncingText = false;
+            }
+        }
+
+        /// <summary>
+        /// Parses text such as <c>"45%"</c>, <c>"45"</c> or
+        /// <c>"45.5"</c> and moves <see cref="Value"/> to match.
+        /// A <c>%</c> suffix is read as a share of the range,
+        /// a bare number is read as the value itself. Text that
+        /// holds no number ("Loading...") is left alone.
+        /// </summary>
+        private void ApplyValueFromText(string text)
+        {
+            string trimmed = text.Trim();
+
+            if (trimmed.Length == 0)
+                return;
+
+            bool isPercent = trimmed.EndsWith("%", StringComparison.Ordinal);
+
+            string numeric = isPercent
+                ? trimmed[..^1].Trim()
+                : trimmed;
+
+            if (numeric.Length == 0)
+                return;
+
+            if (!double.TryParse(
+                    numeric,
+                    NumberStyles.Float,
+                    CultureInfo.CurrentCulture,
+                    out double parsed))
+            {
+                return;
+            }
+
+            double range = Math.Max(0, Maximum - Minimum);
+
+            int newValue = isPercent
+                ? Minimum + (int)Math.Round(range * parsed / 100.0)
+                : (int)Math.Round(parsed);
+
+            newValue = Math.Max(
+                Minimum,
+                Math.Min(Maximum, newValue));
+
+            Value = newValue;
         }
 
         // =========================================================
@@ -270,10 +406,14 @@ namespace TextProgressbar
         // GRADIENT DIRECTION
         // =========================================================
 
+        /// <summary>
+        /// Direction the gradient sweeps in, used by the progress fill,
+        /// the background and the circular ring gradient.
+        /// </summary>
         [Browsable(true)]
         [Category("Appearance")]
-        [DefaultValue(LinearGradientMode.Horizontal)]
-        public LinearGradientMode GradientMode
+        [DefaultValue(TextProgressbar.GradientMode.LeftToRight)]
+        public GradientMode GradientMode
         {
             get => _gradientMode;
             set
@@ -726,6 +866,8 @@ namespace TextProgressbar
             _text =
                 string.Empty;
 
+            _showValueAsText = true;
+
             // -----------------------------------------------------
             // PROGRESS GRADIENT
             // -----------------------------------------------------
@@ -760,7 +902,7 @@ namespace TextProgressbar
             // -----------------------------------------------------
 
             _gradientMode =
-                LinearGradientMode.Horizontal;
+                TextProgressbar.GradientMode.LeftToRight;
 
             // -----------------------------------------------------
             // BORDER
@@ -806,6 +948,9 @@ namespace TextProgressbar
             _clockwise = true;
             _roundCaps = true;
             _orientation = Orientation.Horizontal;
+
+            // Seed the text so a freshly created bar reads "0%".
+            UpdateValueText();
         }
 
         // =========================================================
@@ -1673,17 +1818,45 @@ namespace TextProgressbar
         // THREE-COLOR GRADIENT BRUSH
         // =========================================================
 
-        private LinearGradientMode EffectiveGradientMode()
+        private GradientMode EffectiveGradientMode()
         {
-            // A horizontal gradient looks wrong on a vertical bar;
-            // coerce it to vertical so thin bars still look right.
+            // A left-to-right sweep looks wrong on a thin vertical bar,
+            // so upright bars fall back to a top-to-bottom sweep.
             if (Orientation == Orientation.Vertical &&
-                _gradientMode == LinearGradientMode.Horizontal)
+                _gradientMode == TextProgressbar.GradientMode.LeftToRight)
             {
-                return LinearGradientMode.Vertical;
+                return TextProgressbar.GradientMode.TopToBottom;
             }
 
             return _gradientMode;
+        }
+
+        /// <summary>
+        /// Angle in degrees, measured clockwise from the horizontal
+        /// axis the way GDI+ defines <see cref="LinearGradientBrush"/>.
+        /// </summary>
+        private static float GradientAngle(GradientMode direction)
+        {
+            switch (direction)
+            {
+                case TextProgressbar.GradientMode.RightToLeft:
+                    return 180f;
+
+                case TextProgressbar.GradientMode.TopToBottom:
+                    return 90f;
+
+                case TextProgressbar.GradientMode.BottomToTop:
+                    return 270f;
+
+                case TextProgressbar.GradientMode.DiagonalDown:
+                    return 45f;
+
+                case TextProgressbar.GradientMode.DiagonalUp:
+                    return 315f;
+
+                default:
+                    return 0f;
+            }
         }
 
         private LinearGradientBrush CreateThreeColorGradientBrush(
@@ -1697,7 +1870,7 @@ namespace TextProgressbar
                     rectangle,
                     color1,
                     color3,
-                    EffectiveGradientMode());
+                    GradientAngle(EffectiveGradientMode()));
 
             brush.InterpolationColors =
                 new ColorBlend
@@ -1831,19 +2004,50 @@ namespace TextProgressbar
 
             int border = Math.Max(0, BorderWidth);
 
-            float ringRadius =
-                (Math.Min(rect.Width, rect.Height) -
-                 border * 2f - _ringThickness) / 2f;
+            // Keep the whole ring, plus the neon glow that strokes
+            // outside it, inside the control. Without this inset the
+            // ring is cut off on all four edges.
+            float half = Math.Min(rect.Width, rect.Height) / 2f;
 
-            if (ringRadius <= _ringThickness / 2f + 1f)
+            // Largest radius any stroke may reach, with 1px left for
+            // anti-aliasing inside the control.
+            float radiusLimit = half - border - 1f;
+
+            // Not enough room for a ring of any kind.
+            if (radiusLimit < 3f)
                 return;
+
+            // Neon strokes outside the ring: reserve a slice of the
+            // radius for it. On small controls that slice (and with it
+            // the glow) shrinks, so the halo never spills past the edge.
+            float glowExtra =
+                _style == RenderStyle.Neon && _glowSpread > 0
+                    ? Math.Min(_glowSpread * 0.9f, radiusLimit * 0.25f)
+                    : 0f;
+
+            float outerLimit = radiusLimit - glowExtra;
+
+            // Thick rings shrink on tiny controls instead of vanishing:
+            // they stay inside the control and keep a hole in the middle.
+            float thickness = Math.Min(
+                _ringThickness,
+                Math.Max(2f, outerLimit * 0.6f));
+
+            thickness = Math.Min(thickness, outerLimit - 1f);
+
+            float ringRadius = outerLimit - thickness / 2f;
+
+            // Spread that still lands inside radiusLimit.
+            float glowSpread = glowExtra > 0f
+                ? Math.Min(_glowSpread, glowExtra / 0.9f)
+                : 0f;
 
             PointF center = new PointF(
                 rect.X + rect.Width / 2f,
                 rect.Y + rect.Height / 2f);
 
-            float outerR = ringRadius + _ringThickness / 2f;
-            float innerR = ringRadius - _ringThickness / 2f;
+            float outerR = ringRadius + thickness / 2f;
+            float innerR = ringRadius - thickness / 2f;
 
             RectangleF outerBounds = new RectangleF(
                 center.X - outerR,
@@ -1887,7 +2091,7 @@ namespace TextProgressbar
             {
                 float br =
                     Math.Min(rect.Width, rect.Height) / 2f -
-                    BorderWidth / 2f;
+                    BorderWidth / 2f - 0.5f;
 
                 RectangleF borderBounds = new RectangleF(
                     center.X - br,
@@ -1912,20 +2116,22 @@ namespace TextProgressbar
             // NEON GLOW (BEHIND THE RING)
             // -------------------------------------------------
 
-            if (_style == RenderStyle.Neon && _glowSpread > 0)
+            int glowSteps = (int)Math.Floor(glowSpread);
+
+            if (_style == RenderStyle.Neon && glowSteps > 0)
             {
-                for (int i = _glowSpread; i >= 1; i--)
+                for (int i = glowSteps; i >= 1; i--)
                 {
                     int alpha =
                         (int)(70.0 *
                               (1.0 -
                                (double)i /
-                               (_glowSpread + 1)));
+                               (glowSpread + 1f)));
 
                     using (Pen glowPen =
                            new Pen(
                                Color.FromArgb(alpha, _glowColor),
-                               _ringThickness + i * 1.8f))
+                               thickness + i * 1.8f))
                     {
                         DrawRingArc(
                             g,
@@ -1948,7 +2154,7 @@ namespace TextProgressbar
                     g,
                     center,
                     ringRadius,
-                    _ringThickness,
+                    thickness,
                     outerBounds,
                     innerBounds,
                     start,
@@ -1986,7 +2192,7 @@ namespace TextProgressbar
                         g,
                         center,
                         ringRadius,
-                        _ringThickness,
+                        thickness,
                         start,
                         dir);
 
@@ -1994,7 +2200,7 @@ namespace TextProgressbar
                         g,
                         center,
                         ringRadius,
-                        _ringThickness,
+                        thickness,
                         start + sweep,
                         dir);
                 }
@@ -2015,7 +2221,7 @@ namespace TextProgressbar
                         g,
                         corePen,
                         center,
-                        ringRadius + _ringThickness / 2f - 0.7f,
+                        ringRadius + thickness / 2f - 0.7f,
                         start,
                         sweep);
 
@@ -2023,7 +2229,7 @@ namespace TextProgressbar
                         g,
                         corePen,
                         center,
-                        ringRadius - _ringThickness / 2f + 0.7f,
+                        ringRadius - thickness / 2f + 0.7f,
                         start,
                         sweep);
                 }
@@ -2276,28 +2482,39 @@ namespace TextProgressbar
             GraphicsPath path = new GraphicsPath();
 
             float absSweep = Math.Abs(sweepAngle);
-            int steps = Math.Max(1, (int)(absSweep / 3f));
 
-            var points = new List<PointF>(2 * steps + 4);
+            // A zero-width sector has nothing to fill, and a degenerate
+            // polygon would only upset GDI+.
+            if (absSweep < 0.01f)
+                return path;
 
-            // Outer edge
+            int steps = Math.Max(
+                2,
+                (int)Math.Ceiling(absSweep / 3f));
+
+            // Build the annulus sector as one explicit closed polygon:
+            // outer arc forwards, inner arc back. Reading the last point
+            // out of GraphicsPath.PathPoints was fragile because
+            // StartFigure() does not guarantee a stored point.
+            PointF[] points = new PointF[(steps + 1) * 2];
+
             for (int i = 0; i <= steps; i++)
             {
                 float a = startAngle + sweepAngle * i / steps;
-                points.Add(PolarPoint(center, outerR, a));
+                points[i] = PolarPoint(center, outerR, a);
             }
 
-            // Line to inner arc end, then inner edge back
-            float endAngle = startAngle + sweepAngle;
-            points.Add(PolarPoint(center, innerR, endAngle));
-
-            for (int i = steps; i >= 0; i--)
+            for (int i = 0; i <= steps; i++)
             {
-                float a = startAngle + sweepAngle * i / steps;
-                points.Add(PolarPoint(center, innerR, a));
+                float a =
+                    startAngle +
+                    sweepAngle * (steps - i) / steps;
+
+                points[steps + 1 + i] =
+                    PolarPoint(center, innerR, a);
             }
 
-            path.AddPolygon(points.ToArray());
+            path.AddPolygon(points);
             return path;
         }
 
@@ -2516,6 +2733,10 @@ namespace TextProgressbar
                 if (base.Value != newValue)
                 {
                     base.Value = newValue;
+
+                    // Keep the displayed text in sync with the value.
+                    UpdateValueText();
+
                     Invalidate();
                 }
             }
